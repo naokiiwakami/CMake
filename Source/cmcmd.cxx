@@ -418,30 +418,38 @@ int HandleLWYU(const std::string& runCmd, const std::string& /* sourceFile */,
 }
 
 int HandleCppLint(const std::string& runCmd, const std::string& sourceFile,
-                  const std::vector<std::string>&)
+                  const std::vector<std::string>& orig_cmd)
 {
   // Construct the cpplint command line.
   std::vector<std::string> cpplint_cmd = cmExpandedList(runCmd, true);
   cpplint_cmd.push_back(sourceFile);
 
-  // Run the cpplint command line.  Capture its output.
-  std::string stdOut;
+  bool is_strict = false;
+  for (auto const &opt : orig_cmd) {
+    if (opt == "-Werror") {
+      is_strict = true;
+      break;
+    }
+  }
+
+  // Run the cpplint command line.  Capture its stderr output.
+  std::string stdErr;
   int ret;
-  if (!cmSystemTools::RunSingleCommand(cpplint_cmd, &stdOut, &stdOut, &ret,
+  if (!cmSystemTools::RunSingleCommand(cpplint_cmd, nullptr, &stdErr, &ret,
                                        nullptr, cmSystemTools::OUTPUT_NONE)) {
-    std::cerr << "Error running '" << cpplint_cmd[0] << "': " << stdOut
+    std::cerr << "Error running '" << cpplint_cmd[0] << "': " << stdErr
               << "\n";
     return 1;
   }
-  if (!stdOut.empty()) {
-    std::cerr << "Warning: cpplint diagnostics:\n";
+  if (!stdErr.empty()) {
+    std::cerr << (is_strict ? "Error" : "Warning") << ": cpplint diagnostics:\n";
     // Output the output from cpplint to stderr
-    std::cerr << stdOut;
+    std::cerr << stdErr;
   }
 
-  // always return 0 so the build can continue as cpplint returns non-zero
+  // return 0 if -Werror is not set, so the build can continue as cpplint returns non-zero
   // for any warning
-  return 0;
+  return is_strict ? ret : 0;
 }
 
 int HandleCppCheck(const std::string& runCmd, const std::string& sourceFile,
@@ -475,7 +483,7 @@ int HandleCppCheck(const std::string& runCmd, const std::string& sourceFile,
   int ret;
   if (!cmSystemTools::RunSingleCommand(cppcheck_cmd, &stdOut, &stdErr, &ret,
                                        nullptr, cmSystemTools::OUTPUT_NONE)) {
-    std::cerr << "Error running '" << cppcheck_cmd[0] << "': " << stdOut
+    std::cerr << "Error running '" << cppcheck_cmd[0] << "': " << stdErr
               << "\n";
     return 1;
   }
